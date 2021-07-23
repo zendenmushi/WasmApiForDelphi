@@ -4,7 +4,7 @@
 Open .dpoj by Delphi10.4 or later
 
 ## Run
-Need WebAssembly runtime. (default=wasmtime, need rebuild=wasmer)
+Need WebAssembly runtime. (default=wasmtime, need rebuild=wasmer) 
 If you use wasmer, please define USE_WASMER and rebuild it.
 
 wasmer/ https://github.com/wasmerio/wasmer/releases/tag/2.0.0 
