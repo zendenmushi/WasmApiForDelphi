@@ -1,10 +1,11 @@
 // Convert form wasmtime.h & etc  -> Delphi
 unit Wasmtime;
+// [ApiNamespace] wasmtime
 
 interface
 uses
   System.Classes, System.SysUtils,
-  Wasm, Ownership
+  Wasm, Wasm.Wasi, Ownership
   ;
 
 type
@@ -300,6 +301,7 @@ type
     IsError : Boolean;
     Error : TOwnWasmtimeError;
     Instance : TOwnWasmtimeInstance;
+    Trap : TOwnTrap;
   end;
 
   TResultWasmtimeGlobal = record
@@ -339,7 +341,7 @@ type
   public
     class function New(context : PWasmtimeContext; const typ : PWasmFunctype; callback : TWasmtimeFuncCallback; env : Pointer; finalizer : TWasmFinalizer) : TWasmtimeFunc; static;
     function GetType() : TOwnFunctype;
-    function Call(const args : PWasmtimeVal; nargs : NativeUInt; results : PWasmtimeVal; nresults : NativeUInt; trap : PPWasmTrap) : TOwnWasmtimeError;
+    function Call(const args : PWasmtimeVal; nargs : NativeUInt; results : PWasmtimeVal; nresults : NativeUInt; var trap: TOwnTrap) : TOwnWasmtimeError;
   public
     store_id : UInt64;
     index : NativeUInt;
@@ -429,7 +431,11 @@ type
 
   TWasmtimeExternKind = (WASMTIME_EXTERN_FUNC, WASMTIME_EXTERN_GLOBAL, WASMTIME_EXTERN_TABLE, WASMTIME_EXTERN_MEMORY, WASMTIME_EXTERN_INSTANCE, WASMTIME_EXTERN_MODULE);
 
-  TWasmtimeExternUnion = record
+  TWasmtimeExtern = record
+  public
+    function GetType(context : PWasmtimeContext) : TOwnExterntype;
+  public
+    kind : TWasmtimeExternKind;
     case TWasmtimeExternKind of
     WASMTIME_EXTERN_FUNC: (func : TWasmtimeFunc);
     WASMTIME_EXTERN_GLOBAL: (global : TWasmtimeGlobal);
@@ -437,14 +443,6 @@ type
     WASMTIME_EXTERN_MEMORY: (memory : TWasmtimeMemory);
     WASMTIME_EXTERN_INSTANCE: (instance : TWasmtimeInstance);
     WASMTIME_EXTERN_MODULE: (module : PWasmtimeModule);
-  end;
-
-  TWasmtimeExtern = record
-  public
-    function GetType(context : PWasmtimeContext) : TOwnExterntype;
-  public
-    kind : TWasmtimeExternKind;
-    of_ : TWasmtimeExternUnion;
   end;
 
 {$REGION 'TWasmtimeStore'}
@@ -472,8 +470,6 @@ type
     class function New(engine : PWasmEngine; data : Pointer; finalizer : TWasmFinalizer) : TOwnWasmtimeStore; static;
     function Context() : PWasmtimeContext;
   end;
-
-  PWasiConfig = Pointer;
 
 {$REGION 'TWasmtimeContext'}
 (**
@@ -503,7 +499,7 @@ type
     procedure ContextGc();
     function AddFuel(fuel : UInt64) : TOwnWasmtimeError;
     procedure FuelConsumed(fuel : PUInt64);
-    function SetWasi(wasi : PWasiConfig) : TOwnWasmtimeError;
+    function SetWasi(wasi : TOwnWasiConfig) : TOwnWasmtimeError;
   end;
 
 {$REGION 'TWasmtimeInterruptHandle'}
@@ -556,17 +552,6 @@ type
   TWasmtimeValkind = (WASMTIME_I32, WASMTIME_I64, WASMTIME_F32, WASMTIME_F64, WASMTIME_V128, WASMTIME_FUNCREF, WASMTIME_EXTERNREF);
   TWasmtimeV128 = array[0..15] of Byte;
 
-  TWasmtimeValunion = record
-    case TWasmtimeValkind of
-    WASMTIME_I32 : (i32 : Int32);
-    WASMTIME_I64 : (i64 : Int64);
-    WASMTIME_F32 : (f32 : Single);
-    WASMTIME_F64 : (f64 : Double);
-    WASMTIME_FUNCREF : (funcref : TWasmtimeFunc);
-    WASMTIME_EXTERNREF : (externref : PWasmtimeExternref);
-    WASMTIME_V128 : (v128 : TWasmtimeV128);
-  end;
-
 {$REGION 'TWasmtimeVal'}
 (**
  * \typedef wasmtime_val_t
@@ -587,7 +572,15 @@ type
     function Copy() : TOwnWasmtimeVal;
   public
     kind : TWasmtimeValkind;
-    of_ : TWasmtimeValunion;
+
+    case TWasmtimeValkind of
+    WASMTIME_I32 : (i32 : Int32);
+    WASMTIME_I64 : (i64 : Int64);
+    WASMTIME_F32 : (f32 : Single);
+    WASMTIME_F64 : (f64 : Double);
+    WASMTIME_FUNCREF : (funcref : TWasmtimeFunc);
+    WASMTIME_EXTERNREF : (externref : PWasmtimeExternref);
+    WASMTIME_V128 : (v128 : TWasmtimeV128);
   end;
 
   TWasmtimeInstancetype = record
@@ -626,7 +619,7 @@ type
     function Define(const module_name : string; const name : string; const item : PWasmtimeExtern) : TOwnWasmtimeError;
     function DefineWasi() : TOwnWasmtimeError;
     function DefineInstance(context : PWasmtimeContext; const name : string; const instance : PWasmtimeInstance) : TOwnWasmtimeError;
-    function Instantiate(context : PWasmtimeContext; const module : PWasmtimeModule; trap : PPWasmTrap) : TResultWasmtimeInstance;
+    function Instantiate(context : PWasmtimeContext; const module : PWasmtimeModule) : TResultWasmtimeInstance;
     function Module(context : PWasmtimeContext; const name : string; const module : PWasmtimeModule) : TOwnWasmtimeError;
     function GetDefault(context : PWasmtimeContext; const name : string) : TResultWasmtimeFunc;
     function Get(context : PWasmtimeContext; const module_name : string; const name : string) : TOwnWasmtimeExtern;
@@ -688,7 +681,7 @@ type
 
   // wasmtime.h
 
-  TWasmtimeWat2WasmAPI = function(const wat : PByte; wat_len : NativeInt; ret : PWasmByteVec) : PWasmtimeError; cdecl;
+  TWasmtimeWat2WasmAPI = function(const wat : PAnsiChar; wat_len : NativeInt; ret : PWasmByteVec) : PWasmtimeError; cdecl;
 
   // wasttime_config.h
 
@@ -715,7 +708,7 @@ type
   // wasmtile_extern.h
 
   TWasmtimeExternDeleteAPI = procedure(val : PWasmtimeExtern); cdecl;
-  TWasmtimeExternTypeAPI = function(context : PWasmtimeContext; val : PWasmtimeExtern) : PWasmExterntype; cdecl;
+  TWasmtimeExternTypeAPI = function(context : PWasmtimeContext; val : PWasmtimeExtern) : {own} PWasmExterntype; cdecl;
 
   // wasmtime_func.h
 
@@ -805,7 +798,7 @@ type
  * found. If the export wasn't found then `item` isn't written to.
  *)
 {$ENDREGION}
-  TWasmtimeCallerExportGetAPI = function(caller : PWasmtimeCaller; const name : PByte; name_len : NativeUInt; item : PWasmtimeExtern) : Boolean; cdecl;
+  TWasmtimeCallerExportGetAPI = function(caller : PWasmtimeCaller; const name : PAnsiChar; name_len : NativeUInt; item : PWasmtimeExtern) : Boolean; cdecl;
 {$REGION 'TWasmtimeCallerContextAPI'}
 (**
  * \brief Returns the store context of the caller object.
@@ -913,7 +906,7 @@ type
  * #wasmtime_extern_t.
  *)
 {$ENDREGION}
-  TWasmtimeInstanceExportGetAPI = function(context : PWasmtimeContext; const instance : PWasmtimeInstance; const name : PByte; name_len : NativeUInt; var {own} item : TWasmtimeExtern) : Boolean; cdecl;
+  TWasmtimeInstanceExportGetAPI = function(context : PWasmtimeContext; const instance : PWasmtimeInstance; const name : PAnsiChar; name_len : NativeUInt; var {own} item : TWasmtimeExtern) : Boolean; cdecl;
 {$REGION 'TWasmtimeInstanceExportNthAPI'}
 (**
  * \brief Get an export by index from an instance.
@@ -934,7 +927,7 @@ type
  * #wasmtime_context_t.
  *)
 {$ENDREGION}
-  TWasmtimeInstanceExportNthAPI = function(context : PWasmtimeContext; const instance : PWasmtimeInstance; index : NativeUint; var out_name : PByte; var name_len : NativeUInt; var {own} item : TWasmtimeExtern) : Boolean; cdecl;
+  TWasmtimeInstanceExportNthAPI = function(context : PWasmtimeContext; const instance : PWasmtimeInstance; index : NativeUint; var out_name : PAnsiChar; var name_len : NativeUInt; var {own} item : TWasmtimeExtern) : Boolean; cdecl;
 
   // wasmtime_table.h
 
@@ -1064,7 +1057,7 @@ type
  * documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Linker.html#name-resolution).
  *)
 {$ENDREGION}
-  TWasmtimeLinkerDefineAPI = function(linker : PWasmtimeLinker; const module : PByte; module_len : NativeUInt; const name : PByte; name_len : NativeUInt; const item : PWasmtimeExtern) : PWasmtimeError; cdecl;
+  TWasmtimeLinkerDefineAPI = function(linker : PWasmtimeLinker; const module : PAnsiChar; module_len : NativeUInt; const name : PAnsiChar; name_len : NativeUInt; const item : PWasmtimeExtern) : PWasmtimeError; cdecl;
 {$REGION 'TWasmtimeLinkerDefineWasiAPI'}
 (**
  * \brief Defines WASI functions in this linker.
@@ -1106,7 +1099,7 @@ type
  * documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Linker.html#name-resolution).
  *)
 {$ENDREGION}
-  TWasmtimeLinkerDefineInstanceAPI = function(linker : PWasmtimeLinker; context : PWasmtimeContext; const name : PByte; name_len : NativeUInt; const instance : PWasmtimeInstance) : PWasmtimeError; cdecl;
+  TWasmtimeLinkerDefineInstanceAPI = function(linker : PWasmtimeLinker; context : PWasmtimeContext; const name : PAnsiChar; name_len : NativeUInt; const instance : PWasmtimeInstance) : PWasmtimeError; cdecl;
 {$REGION 'TWasmtimeLinkerInstantiateAPI'}
 (**
  * \brief Instantiates a #wasm_module_t with the items defined in this linker.
@@ -1153,7 +1146,7 @@ type
  * documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Linker.html#method.module).
  *)
 {$ENDREGION}
-  TWasmtimeLinkerModuleAPI = function(linker : PWasmtimeLinker; context : PWasmtimeContext; const name : PByte; name_len : NativeUInt; const module : PWasmtimeModule) : PWasmtimeError; cdecl;
+  TWasmtimeLinkerModuleAPI = function(linker : PWasmtimeLinker; context : PWasmtimeContext; const name : PAnsiChar; name_len : NativeUInt; const module : PWasmtimeModule) : PWasmtimeError; cdecl;
 {$REGION 'TWasmtimeLinkerGetDefaultAPI'}
 (**
  * \brief Acquires the "default export" of the named module in this linker.
@@ -1171,7 +1164,7 @@ type
  * documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Linker.html#method.get_default).
  *)
 {$ENDREGION}
-  TWasmtimeLinkerGetDefaultAPI = function(linker : PWasmtimeLinker; context : PWasmtimeContext; const name : PByte; name_len : NativeUInt; var func : TWasmtimeFunc) : PWasmtimeError; cdecl;
+  TWasmtimeLinkerGetDefaultAPI = function(linker : PWasmtimeLinker; context : PWasmtimeContext; const name : PAnsiChar; name_len : NativeUInt; var func : TWasmtimeFunc) : PWasmtimeError; cdecl;
 {$REGION 'TWasmtimeLinkerGetAPI'}
 (**
  * \brief Loads an item by name from this linker.
@@ -1188,7 +1181,7 @@ type
  * filled in. Otherwise zero is returned.
  *)
 {$ENDREGION}
-  TWasmtimeLinkerGetAPI = function(linker : PWasmtimeLinker; context : PWasmtimeContext; const module : PByte; module_len : NativeUInt; const name : PByte; name_len : NativeUInt; item : PWasmtimeExtern) : Boolean; cdecl;
+  TWasmtimeLinkerGetAPI = function(linker : PWasmtimeLinker; context : PWasmtimeContext; const module : PAnsiChar; module_len : NativeUInt; const name : PAnsiChar; name_len : NativeUInt; item : PWasmtimeExtern) : Boolean; cdecl;
 
   // wasmtime_memory.h
 
@@ -1469,7 +1462,7 @@ type
  * (even if an error is returned).
  *)
 {$ENDREGION}
-  TWasmtimeContextSetWasiAPI = function(context : PWasmtimeContext; wasi : PWasiConfig) : PWasmtimeError;
+  TWasmtimeContextSetWasiAPI = function(context : PWasmtimeContext; {own} wasi : PWasiConfig) : PWasmtimeError;
 
 {$REGION 'TWasmtimeInterruptHandleNewAPI'}
 (**
@@ -1514,7 +1507,7 @@ type
  * pointer. If `false` is returned then this is not a wasi exit trap.
  *)
 {$ENDREGION}
-  TWasmtimeTrapNewAPI = function(const msg : PByte; msg_len : NativeUInt) : PWasmTrap; cdecl;
+  TWasmtimeTrapNewAPI = function(const msg : PAnsiChar; msg_len : NativeUInt) : PWasmTrap; cdecl;
 {$REGION 'TWasmtimeTrapExitStatusAPI'}
 (**
  * \brief Attempts to extract a WASI-specific exit status from this trap.
@@ -1722,6 +1715,7 @@ begin
   wasmtime_runtime := LoadLibrary(PWideChar(dll_name));
   InitAPIs(wasmtime_runtime);
   TWasm.InitAPIs(wasmtime_runtime);
+  TWasi.InitAPIs(wasmtime_runtime);
 end;
 
 class procedure TWasmtime.InitAPIs(runtime : HMODULE);
@@ -2594,14 +2588,14 @@ begin
     exit(false);
   end;
 
-  var error := TWasmtime.wat2wasm(PByte(binary.Unwrap.data), file_size, @self);
+  var error := TWasmtime.wat2wasm(PAnsiChar(binary.Unwrap.data), file_size, @self);
   result := error = nil;
 end;
 
 function TWasmByteVecHelper.Wat2Wasm(wat: AnsiString): TOwnWasmtimeError;
 begin
   var len := Length(wat);
-  var err := TWasmtime.wat2wasm(PByte(PAnsiChar(wat)), len, @self);
+  var err := TWasmtime.wat2wasm(PAnsiChar(wat), len, @self);
   result := TOwnWasmtimeError.Wrap(err);
 end;
 
@@ -2701,10 +2695,12 @@ end;
 
 { TWasmtimeFunc }
 
-function TWasmtimeFunc.Call(const args: PWasmtimeVal; nargs: NativeUInt; results: PWasmtimeVal; nresults: NativeUInt; trap: PPWasmTrap): TOwnWasmtimeError;
+function TWasmtimeFunc.Call(const args: PWasmtimeVal; nargs: NativeUInt; results: PWasmtimeVal; nresults: NativeUInt; var trap: TOwnTrap): TOwnWasmtimeError;
 begin
-  var error := TWasmtime.func_call(context, @self, args, nargs, results, nresults, trap);
+  var pt : PWasmTrap := nil;
+  var error := TWasmtime.func_call(context, @self, args, nargs, results, nresults, @pt);
   result := TOwnWasmtimeError.Wrap(error);
+  trap := TOwnTrap.Wrap(pt);
 end;
 
 function TWasmtimeFunc.GetType(): TOwnFunctype;
@@ -2766,13 +2762,15 @@ end;
 
 function TWasmtimeInstance.GetExport(name: UTF8String): TOwnWasmtimeExtern;
 begin
-  var namep := PByte(name);
+  var namep := PAnsiChar(name);
   var name_len := Length(name);
   var p : PWasmtimeExtern;
   System.New(p);
-  var err := TWasmtime.instance_export_get(context, @self, namep, name_len, p^);
-  if err then
+  var found := TWasmtime.instance_export_get(context, @self, namep, name_len, p^);
+  if found then
   begin
+    if p.kind <> WASMTIME_EXTERN_MODULE then p.instance.context := context;
+
     result := TOwnWasmtimeExtern.Wrap(p,wasmtime_extern_disposer_host);
   end else begin
     Dispose(p);
@@ -2782,18 +2780,19 @@ end;
 
 function TWasmtimeInstance.GetExportByIndex(index: NativeUInt; out name: UTF8String): TOwnWasmtimeExtern;
 begin
-  var out_name : PByte;
+  var out_name : PAnsiChar;
   var name_len : NativeUInt;
   var p : PWasmtimeExtern;
   System.New(p);
-  var err := TWasmtime.instance_export_nth(context, @self, index, out_name, name_len, p^);
-  if err then
+  var found := TWasmtime.instance_export_nth(context, @self, index, out_name, name_len, p^);
+  if found then
   begin
     var buf := TArray<Byte>.Create();
     SetLength(buf, name_len);
     Move(out_name^, buf[0], name_len);
     name := UTF8String(PAnsiChar(@buf[0]));
 
+    if p.kind <> WASMTIME_EXTERN_MODULE then p.instance.context := context;
     result := TOwnWasmtimeExtern.Wrap(p, wasmtime_extern_disposer_host);
   end else begin
     Dispose(p);
@@ -2860,12 +2859,14 @@ end;
 
 function TWasmtimeCaller.GetExport(name: UTF8String): TOwnWasmtimeExtern;
 begin
-  var namep := PByte(name);
+  var namep := PAnsiChar(name);
   var name_len := Length(name);
 
   var p : PWasmtimeExtern;
   System.New(p);
   TWasmtime.caller_export_get(@self, namep, name_len, p);  //todo: *** check! ownership of item
+  if p.kind <> WASMTIME_EXTERN_MODULE then p.func.context := TWasmtime.caller_context(@self);
+
   result := TOwnWasmtimeExtern.Wrap(p, wasmtime_extern_disposer_host);
 end;
 
@@ -2934,9 +2935,9 @@ begin
   TWasmtime.context_set_data(@self, data);
 end;
 
-function TWasmtimeContext.SetWasi(wasi: PWasiConfig): TOwnWasmtimeError;
+function TWasmtimeContext.SetWasi(wasi: TOwnWasiConfig): TOwnWasmtimeError;
 begin
-  result := TOwnWasmtimeError.Wrap( TWasmtime.context_set_wasi(@self, wasi));
+  result := TOwnWasmtimeError.Wrap( TWasmtime.context_set_wasi(@self, (-wasi).Move));
 end;
 
 { TWasmtimeInterruptHandle }
@@ -2961,7 +2962,7 @@ end;
 class function TWasmtimeTrap.New(const msg: string): TOwnTrap;
 begin
   var utf8 := UTF8String(msg);
-  result := TOwnTrap.Wrap(TWasmtime.trap_new(PByte(utf8), Length(utf8)));
+  result := TOwnTrap.Wrap(TWasmtime.trap_new(PAnsiChar(utf8), Length(utf8)));
 end;
 
 { TWasmtimeFrame }
@@ -3054,13 +3055,13 @@ function TWasmtimeLinker.Define(const module_name, name: string; const item: PWa
 begin
   var moduleutf8 := UTF8String(module_name);
   var nameutf8 := UTF8String(name);
-  result := TOwnWasmtimeError.Wrap( TWasmtime.linker_define(@self, PByte(moduleutf8), Length(moduleutf8), PByte(nameutf8), Length(nameutf8), item) );
+  result := TOwnWasmtimeError.Wrap( TWasmtime.linker_define(@self, PAnsiChar(moduleutf8), Length(moduleutf8), PAnsiChar(nameutf8), Length(nameutf8), item) );
 end;
 
 function TWasmtimeLinker.DefineInstance(context: PWasmtimeContext; const name: string; const instance: PWasmtimeInstance): TOwnWasmtimeError;
 begin
   var nameutf8 := UTF8String(name);
-  result := TOwnWasmtimeError.Wrap( TWasmtime.linker_define_instance(@self, context, PByte(nameutf8), Length(nameutf8), instance) );
+  result := TOwnWasmtimeError.Wrap( TWasmtime.linker_define_instance(@self, context, PAnsiChar(nameutf8), Length(nameutf8), instance) );
 end;
 
 function TWasmtimeLinker.DefineWasi: TOwnWasmtimeError;
@@ -3074,7 +3075,9 @@ begin
   var nameutf8 := UTF8String(name);
   var p : PWasmtimeExtern;
   System.New(p);
-  TWasmtime.linker_get(@self, context, PByte(moduleutf8), Length(moduleutf8), PByte(nameutf8), Length(nameutf8), p);
+  TWasmtime.linker_get(@self, context, PAnsiChar(moduleutf8), Length(moduleutf8), PAnsiChar(nameutf8), Length(nameutf8), p);
+  if p.kind <> WASMTIME_EXTERN_MODULE then p.instance.context := context;
+
   result := TOwnWasmtimeExtern.Wrap(p, wasmtime_extern_disposer_host);
 end;
 
@@ -3083,28 +3086,30 @@ begin
   var nameutf8 := UTF8String(name);
   var p : PWasmtimeFunc;
   System.New(p);
-  var err := TWasmtime.linker_get_default(@self, context, PByte(nameutf8), Length(nameutf8), p^);
+  var err := TWasmtime.linker_get_default(@self, context, PAnsiChar(nameutf8), Length(nameutf8), p^);
   p.context := context;
   result.IsError := err <> nil;
   result.Func := TOwnWasmtimeFunc.Wrap(p);
   result.Error := TOwnWasmtimeError.Wrap(err);
 end;
 
-function TWasmtimeLinker.Instantiate(context: PWasmtimeContext; const module: PWasmtimeModule; trap: PPWasmTrap): TResultWasmtimeInstance;
+function TWasmtimeLinker.Instantiate(context: PWasmtimeContext; const module: PWasmtimeModule): TResultWasmtimeInstance;
 begin
   var p : PWasmtimeInstance;
   System.New(p);
-  var err := TWasmtime.linker_instantiate(@self, context, module, p^, trap);
+  var pt : PWasmTrap := nil;
+  var err := TWasmtime.linker_instantiate(@self, context, module, p^, @pt);
   p.context := context;
   result.IsError := err <> nil;
   result.Instance := TOwnWasmtimeInstance.Wrap(p);
   result.Error := TOwnWasmtimeError.Wrap(err);
+  result.Trap := TOwnTrap.Wrap(pt);
 end;
 
 function TWasmtimeLinker.Module(context: PWasmtimeContext; const name: string; const module: PWasmtimeModule): TOwnWasmtimeError;
 begin
   var nameutf8 := UTF8String(name);
-  var err := TWasmtime.linker_module(@self, context, PByte(nameutf8), Length(nameutf8), module);
+  var err := TWasmtime.linker_module(@self, context, PAnsiChar(nameutf8), Length(nameutf8), module);
   result := TOwnWasmtimeError.Wrap(err);
 end;
 

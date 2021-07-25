@@ -60,7 +60,7 @@ begin
   var trap := func.Call(@args_, @results);
   if trap.IsError then
   begin
-    var s := (+trap).GetMessage().Unwrap.AsUTF8String;
+    var s := (+trap).GetMessage();
     writeln('> Error on result, expected empty '+s);
     halt(1);
   end;
@@ -79,7 +79,7 @@ begin
   var trap := func.Call(@args_, @results);
   if trap.IsError then
   begin
-    var s := (+trap).GetMessage().Unwrap.AsUTF8String;
+    var s := (+trap).GetMessage();
     writeln('> Error on result, expected trap '+s);
     halt(1);
   end;

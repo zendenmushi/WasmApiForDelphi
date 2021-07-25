@@ -2,7 +2,7 @@ unit Ownership;
 
 interface
 uses
-  System.SysUtils, System.SyncObjs;
+  System.SysUtils, System.SyncObjs, System.Rtti, System.TypInfo;
 
 type
 
@@ -22,7 +22,7 @@ type
     constructor Create(Data : T; Deleter : TRcDeleter = nil);
     destructor  Destroy; override;
     function Unwrap : T;
-    function Move : T; // 所有権を移動させる/移動したことを示す状態にする(FDeleterをnilにする。)  ※TObjectに対しては無効
+    function Move : T; // 所有権を移動させる/移動したことを示す状態にする(FDeleterをnilにする。)  ※TObjectに対しても有効
   end;
 
   ERcDroppedException = class(Exception)
@@ -36,6 +36,19 @@ type
   // New()したレコードへのポインターを管理する場合、DeleterにDefaultRecordDisposer()を指定する必要あり
   //  ※Deleterを指定しないとメモリリークが発生する
   //  (ここに記述している内容は実際にはI/TRcContainer<>が処理している)
+
+  //  2021.7.24 保持しているデータの型を検査するメソッドを追加(IsType, ClassType, Typeinfo)
+  //  これを使って、格納している型が異なるTUniq<>からTRc<>に移動できるようになる
+  //  例)  var obj : TObject;
+  //       obj := TStringList.Create;
+  //       var uniq := TUniq.Wrap(obj);  // -> uniq is TUniq<TObject>
+  //       var rc : TRc<TStringList>;    //
+  //       // rc := uniq.MoveTo; // NG: IRcContainer<TStringList>とIRcContainer<TObject>は互換性がないため
+  //       if uniq.ClassType is rc.ClassType then // 格納している型の互換性チェック
+  //       begin
+  //         rc := TRc.Wrap( TStringList(uniq.RleaseOwnership) ); // 内部処理：uniqからMoveToでインターフェイスを取り出す。この時点でuniqの管理から外れる。インターフェイスのMoveでデータを取り出す。この時点でインターフェイスの管理からも外れるので再Wrap可能となる
+  //         //rc := TRc.Wrap( TStringList(uniq.MoveTo.Unwrap) ); // NG: この書き方だとUnwrap直後にインターフェイスが解放されてデータも解放されてしまう
+  //       end;
   TRc<T> = record
   private
     FStrongRef : IRcContainer<T>;
@@ -47,6 +60,13 @@ type
     class operator Negative(Src : TRc<T>) : IRcContainer<T>;
     function Unwrap : T; overload;
     procedure Unwrap(func : TRcUnwrapProc<T>); overload;
+    function IsNone() : Boolean;   // Wrap()するまでの期間はNoneの可能性があるので復活
+    function IsType(typ : TClass) : Boolean; overload;
+    function IsType(typ : Pointer) : Boolean; overload;
+    function IsType<U>() : Boolean; overload;
+    function ClassType : TClass;
+    function TypeInfo : Pointer;
+    function DefaultT : T;
 
 //    procedure Drop; // Drop後にUnwrapされるのを防ぎようがないのでコメントアウトしておく。意図したタイミングで解放したい場合はbegin/endでスコープを作る
   end;
@@ -64,6 +84,9 @@ type
     function TryUnwrap(Func : TRcUnwrapProc<T>) : Boolean; overload;
     function TryUnwrap(out Data : T) : Boolean; overload;
     function TryUnwrap(out Data : TRc<T>) : Boolean; overload;
+    function IsType(typ : TClass) : Boolean; overload;
+    function IsType(typ : Pointer) : Boolean; overload;
+    function IsType<U>() : Boolean; overload;
 
     procedure Drop;
   end;
@@ -108,6 +131,7 @@ type
   // をもちいる
   // Assign()が使用されている場合は例外を出してコピーを禁止する方法を試してみたが
   // Moveを実装しようとするとAssign()が使われてしまうのでどうにもならなかった
+  //  2021.7.24 保持しているデータの型を検査するメソッドを追加(IsType, ClassType, Typeinfo)
   TUniq<T> = record
   private
     FStrongRef : IRcContainer<T>;
@@ -119,8 +143,15 @@ type
     function IsNone() : Boolean;
     function TryUnwrap(var Data: T): Boolean; overload;
     function TryUnwrap(Func: TRcUnwrapProc<T>): Boolean; overload;
-    function MoveTo : IRcContainer<T>; overload;
+    function MoveTo : IRcContainer<T>;
+    function RleaseOwnership : T;
     procedure Drop;  // TRc<>とは違い、TryUnwarpでしか取り出せないのでDropも有効にした。
+    function IsType(typ : TClass) : Boolean; overload;
+    function IsType(typ : Pointer) : Boolean; overload;
+    function IsType<U>() : Boolean; overload;
+    function ClassType : TClass;
+    function TypeInfo : Pointer;
+    function DefaultT : T;
   end;
 
   TUniq = class
@@ -236,6 +267,25 @@ begin
 end;
 }
 
+function TRc<T>.ClassType: TClass;
+var
+  p : TObject;
+  o : T absolute p;
+begin
+  if GetTypeKind(T) = tkClass then
+  begin
+    o := (FStrongRef as TRcContainer<T>).FData;
+    result := p.ClassType;
+  end else begin
+    result := nil;
+  end;
+end;
+
+function TRc<T>.DefaultT: T;
+begin
+  result := Default(T);
+end;
+
 class operator TRc<T>.Finalize(var Dest: TRc<T>);
 begin
   Dest.FStrongRef := nil; // ref --
@@ -244,6 +294,35 @@ end;
 class operator TRc<T>.Implicit(const Src: IRcContainer<T>): TRc<T>;
 begin
   result.FStrongRef := Src;
+end;
+
+function TRc<T>.IsNone: Boolean;
+begin
+  result := FStrongRef = nil;
+end;
+
+function TRc<T>.IsType(typ: Pointer): Boolean;
+begin
+  result := System.TypeInfo(T) = typ;
+end;
+
+function TRc<T>.IsType<U>(): Boolean;
+begin
+  result := System.TypeInfo(T) = System.TypeInfo(U);
+end;
+
+function TRc<T>.IsType(typ: TClass): Boolean;
+var
+  p : TObject;
+  o : T absolute p;
+begin
+  if GetTypeKind(T) = tkClass then
+  begin
+    o := (FStrongRef as TRcContainer<T>).FData;
+    result := p is typ;
+  end else begin
+    result := false;
+  end;
 end;
 
 class operator TRc<T>.Negative(Src: TRc<T>): IRcContainer<T>;
@@ -256,6 +335,11 @@ begin
   if Src.FStrongRef = nil then raise ERcDroppedException.Create('Unable to unwrap dropped references!');
 
   result := Src.FStrongRef.Unwrap;
+end;
+
+function TRc<T>.TypeInfo: Pointer;
+begin
+  result := System.TypeInfo(T);
 end;
 
 function TRc<T>.Unwrap: T;
@@ -291,6 +375,30 @@ end;
 function TOptionRc<T>.IsNone: Boolean;
 begin
   result := FStrongRef = nil;
+end;
+
+function TOptionRc<T>.IsType(typ: TClass): Boolean;
+var
+  p : TObject;
+  o : T absolute p;
+begin
+  if GetTypeKind(T) = tkClass then
+  begin
+    o := (FStrongRef as TRcContainer<T>).FData;
+    result := p is typ;
+  end else begin
+    result := false;
+  end;
+end;
+
+function TOptionRc<T>.IsType(typ: Pointer): Boolean;
+begin
+  result := System.TypeInfo(T) = typ;
+end;
+
+function TOptionRc<T>.IsType<U>: Boolean;
+begin
+  result := System.TypeInfo(T) = System.TypeInfo(U);
 end;
 
 class operator TOptionRc<T>.Negative(Src: TOptionRc<T>): IRcContainer<T>;
@@ -405,6 +513,25 @@ begin
   Src.FStrongRef := nil;
 end;
 
+function TUniq<T>.ClassType: TClass;
+var
+  p : TObject;
+  o : T absolute p;
+begin
+  if GetTypeKind(T) = tkClass then
+  begin
+    o := (FStrongRef as TRcContainer<T>).FData;
+    result := p.ClassType;
+  end else begin
+    result := nil;
+  end;
+end;
+
+function TUniq<T>.DefaultT: T;
+begin
+  result := Default(T);
+end;
+
 procedure TUniq<T>.Drop;
 begin
   FStrongRef := nil; // ref --
@@ -418,6 +545,36 @@ end;
 function TUniq<T>.IsNone: Boolean;
 begin
   result := FStrongRef = nil;
+end;
+
+function TUniq<T>.IsType(typ: TClass): Boolean;
+var
+  p : TObject;
+  o : T absolute p;
+begin
+  if GetTypeKind(T) = tkClass then
+  begin
+    o := (FStrongRef as TRcContainer<T>).FData;
+    result := p is typ;
+  end else begin
+    result := false;
+  end;
+end;
+
+function TUniq<T>.IsType(typ: Pointer): Boolean;
+begin
+  result := System.TypeInfo(T) = typ;
+end;
+
+function TUniq<T>.IsType<U>: Boolean;
+begin
+  result := System.TypeInfo(T) = System.TypeInfo(U);
+end;
+
+function TUniq<T>.RleaseOwnership: T;
+begin
+  var intf := MoveTo;
+  if intf <> nil then result := intf.Move else result := Default(T);
 end;
 
 function TUniq<T>.MoveTo: IRcContainer<T>;
@@ -437,6 +594,11 @@ function TUniq<T>.TryUnwrap(Func: TRcUnwrapProc<T>): Boolean;
 begin
   result := FStrongRef <> nil;
   if result then func(FStrongRef.Unwrap);
+end;
+
+function TUniq<T>.TypeInfo: Pointer;
+begin
+  result := System.TypeInfo(T);
 end;
 
 class function TUniq<T>.Wrap(Data: T; Deleter: TRcDeleter): TUniq<T>;

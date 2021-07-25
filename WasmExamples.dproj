@@ -189,6 +189,9 @@
         <DCCReference Include="WasmSample_Multi.pas"/>
         <DCCReference Include="WasmSample_Table.pas"/>
         <DCCReference Include="WasmSample_Threads.pas"/>
+        <DCCReference Include="WasmtimeSample_Linking.pas"/>
+        <DCCReference Include="Wasm.Wasi.pas"/>
+        <DCCReference Include="Wasmtime.pas"/>
         <BuildConfiguration Include="Release">
             <Key>Cfg_2</Key>
             <CfgParent>Base</CfgParent>
