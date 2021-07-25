@@ -13,7 +13,8 @@ uses
   WasmSample_Memory in 'WasmSample_Memory.pas',
   WasmSample_Multi in 'WasmSample_Multi.pas',
   WasmSample_Table in 'WasmSample_Table.pas',
-  WasmSample_Threads in 'WasmSample_Threads.pas';
+  WasmSample_Threads in 'WasmSample_Threads.pas',
+  WasmtimeSample_Linking in 'WasmtimeSample_Linking.pas';
 
 begin
   try
