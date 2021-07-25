@@ -680,6 +680,7 @@ type
     class function NewFromString(s : UTF8String): TOwnName; static;
     class function NewFromStringNt(s : UTF8String): TOwnName; static;
     function AsUTF8String : UTF8String;
+    function AsString : string;
     function Copy() : TOwnByteVec;
     procedure Assign(const Src : TOwnByteVec);
   public
@@ -1005,7 +1006,7 @@ type
     function AsRef : PWasmRef;
     function AsRefConst : PWasmRef;
     class function New(store : PWasmStore;  const message : PWasmMessage) : TOwnTrap; overload; static;
-    function GetMessage() : TOwnMessage;
+    function GetMessage() : string;
     function Origin() : TOwnFrame;
     function Trace() : TOwnFrameVec;
   end;
@@ -2671,12 +2672,6 @@ begin
   TWasm.trap_delete(p);
 end;
 
-procedure trap_disposer_host(p : Pointer);
-begin
-  TWasm.trap_delete(p);
-  Dispose(p);
-end;
-
 procedure foreign_disposer(p : Pointer);
 begin
   TWasm.foreign_delete(p);
@@ -2854,6 +2849,14 @@ begin
   SetLength(buf, size+1);
   Move(data^, buf[0], size);
   result := UTF8String(PAnsiChar(@buf[0]));
+end;
+
+function TWasmByteVec.AsString: string;
+begin
+  var buf := TArray<Byte>.Create();
+  SetLength(buf, size+1);
+  Move(data^, buf[0], size);
+  result := string(PAnsiChar(@buf[0]));
 end;
 
 class function TWasmByteVec.NewFromString(s : UTF8String): TOwnName;
@@ -5174,12 +5177,16 @@ begin
   result := TOwnTrap.Wrap(p, trap_disposer); // ref ++
 end;
 
-function TWasmTrap.GetMessage() : TOwnMessage;
+function TWasmTrap.GetMessage() : string;
 begin
-  var out_ : PWasmMessage;
-  System.New(out_);
+  var vec : TWasmByteVec;
+  var out_ := @vec;
   TWasm.trap_message(@self, out_);
-  result := TOwnMessage.Wrap(PWasmByteVec(out_), byte_vec_disposer_host); // ref ++
+  try
+    result := vec.AsString();
+  finally
+    TWasm.byte_vec_delete(out_);
+  end;
 end;
 
 function TWasmTrap.Origin() : TOwnFrame;
@@ -5692,10 +5699,10 @@ end;
 
 function TWasmGlobal.GetVal() : TOwnVal;
 begin
-  var p : PWasmVal;
-  System.New(p);
-  TWasm.global_get(@self, p);
-  result := TOwnVal.Wrap(p, val_disposer_host); // ref ++
+  var out_ : PWasmVal;
+  System.New(out_);
+  TWasm.global_get(@self, out_);
+  result := TOwnVal.Wrap(out_, val_disposer_host); // ref ++
 end;
 
 procedure TWasmGlobal.SetVal( const val : PWasmVal);
