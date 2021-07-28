@@ -14,7 +14,8 @@ uses
   WasmSample_Multi in 'WasmSample_Multi.pas',
   WasmSample_Table in 'WasmSample_Table.pas',
   WasmSample_Threads in 'WasmSample_Threads.pas',
-  WasmtimeSample_Linking in 'WasmtimeSample_Linking.pas';
+  WasmtimeSample_Linking in 'WasmtimeSample_Linking.pas',
+  WasmTest_ShareMemory in 'WasmTest_ShareMemory.pas';
 
 begin
   try
