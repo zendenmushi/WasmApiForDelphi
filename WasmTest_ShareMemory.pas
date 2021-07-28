@@ -49,12 +49,13 @@ begin
     '  (func $f (import "" "f") (param i32 i32 i32 i32) (result i32 i32 i32 i32))'+
     ''+
     '  (func $g (export "g")  (result i32 i32 i32 i32)'+
-    '    (i32.load (i32.const 0x1000))'+
+    '    (i32.load (i32.const 0x0000))'+
     '    (i32.load (i32.const 0x1004))'+
     '    (i32.load (i32.const 0x1008))'+
     '    (i32.load (i32.const 0x100C))'+
     '    (call $f)'+
     '  )'+
+    '  (data (i32.const 0x0) "\55\AA\55\AA")'+
     ')';
 
   var err := binary.Unwrap.Wat2Wasm(wat);
@@ -161,7 +162,7 @@ begin
   assert(res[0].i32 = $07060504);
   assert(res[1].i32 = $030003);
   assert(res[2].i32 = $020002);
-  assert(res[3].i32 = $010001);
+  assert(UInt32(res[3].i32) = $AA55AA55);
 
   // Shut down.
   writeln('Shutting down...');
