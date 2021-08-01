@@ -83,7 +83,7 @@ begin
     stream.Free;
   end;
 {$else}
-    var wat : AnsiString :=
+    var wat :=
       '(module'+
       '  (func $print (import "" "print") (param i32) (result i32))'+
       '  (func $closure (import "" "closure") (result i32))'+
@@ -204,7 +204,7 @@ begin
       exit(false);
     end;
 {$else}
-    var wat : AnsiString :=
+    var wat :=
       '(module'+
       '  (func $print (import "" "print") (param i32) (result i32))'+
       '  (func $closure (import "" "closure") (result i32))'+
@@ -253,7 +253,7 @@ begin
   Writeln('Instantiating module...');
 
   var externs := [ (+print_func).AsExtern, (+closure_func).AsExtern ];
-  var instance := TWasmInstance.New(+store, +module, externs, nil);
+  var instance := TWasmInstance.New(+store, +module, externs);
   if instance.IsNone then
   begin
     writeln('> Error instantiating module!');

@@ -11,6 +11,7 @@ uses
   ,WasmSample_Threads
   ,WasmtimeSample_Linking
   ,WasmTest_ShareMemory
+  ,WasmTest_Bench
 {$ifndef USE_WASMER}
   , Wasmtime
 {$else}
@@ -43,6 +44,7 @@ begin
     writeln('6: Threads (* wasmer NG : ''module_share'' is not implemented in wasmer)');
     writeln('7: Linking / Wasmtime');
     writeln('8: ShareMemory');
+    writeln('9: Bench');
     writeln('');
     writeln('q: Quit');
     writeln('');
@@ -58,6 +60,7 @@ begin
     '6' : ThreadsSample();
     '7' : LinkingSample();
     '8' : ShareMemory();
+    '9' : Bench();
     end;
   until ch = 'q';
 end;

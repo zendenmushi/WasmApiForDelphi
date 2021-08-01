@@ -115,7 +115,7 @@ begin
     exit(false);
   end;
 {$else}
-  var wat : AnsiString :=
+  var wat :=
     '(module'+
     '  (memory (export "memory") 2 3)'+
     ''+
@@ -141,7 +141,7 @@ begin
 
   // Instantiate.
   Writeln('Instantiating module...');
-  var instance := TWasmInstance.New(+store, +module, [], nil);
+  var instance := TWasmInstance.New(+store, +module, []);
   if instance.IsNone then
   begin
     writeln('> Error instantiating module!');

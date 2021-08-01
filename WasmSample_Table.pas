@@ -69,7 +69,7 @@ begin
 {$ifdef USE_WASMFILE}
   binary.Unwrap.LoadFromFile('table.wasm');
 {$else}
-  var wat : AnsiString :=
+  var wat :=
     '(module'+
     '  (table (export "table") 2 10 funcref)'+
     ''+
@@ -97,7 +97,7 @@ begin
   // Instantiate.
   writeln('Instantiating module...');
   var imports := TWasmExternVec.NewEmpty;
-  var instance := TWasmInstance.New(+store, +module, +imports, nil);
+  var instance := TWasmInstance.New(+store, +module, +imports);
   if instance.IsNone then
   begin
     writeln('> Error instantiating module!');
@@ -168,7 +168,7 @@ begin
   // TODO(wasm+): Once Wasm allows multiple tables, turn this into import.
   writeln('Creating stand-alone table...');
   var lim := TWasmLimits.Create(5,5);
-  var tabletype := TWasmTableType.New( +TWasmValtype.New(WASM_FUNCREF), @lim);
+  var tabletype := TWasmTableType.New( TWasmValtype.New(WASM_FUNCREF), @lim);
   var table2 := TWasmTable.New(+store, +tabletype, nil);
   check(table2.Unwrap.Size = 5);
   check(not table2.Unwrap.Grow(1,nil));

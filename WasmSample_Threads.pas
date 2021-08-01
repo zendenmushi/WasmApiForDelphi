@@ -50,12 +50,12 @@ begin
     var func := TWasmFunc.New(+store, +TWasmFunctype.New([WASM_I32],[]), callback);
 
     var val := WASM_I32_VAL(args.id);
-    var global_type := TWasmGlobaltype.New(TWasm.valtype_new_i32(), WASM_CONST);
+    var global_type := TWasmGlobaltype.New(WASM_I32, WASM_CONST);
     var global := TWasmGlobal.New(+store, +global_type, @val);
 
     // Instantiate.
     var externs := [ (+func).AsExtern, (+global).AsExtern ];
-    var instance := TWasmInstance.New(+store, +module, externs, nil);
+    var instance := TWasmInstance.New(+store, +module, externs);
     if instance.IsNone then
     begin
       writeln('> Error instantiating module!');
@@ -113,7 +113,7 @@ begin
     exit(false);
   end;
 {$else}
-  var wat : AnsiString :=
+  var wat :=
     '(module'+
     '  (func $message (import "" "hello") (param i32))'+
     '  (global $id (import "" "id") i32)'+

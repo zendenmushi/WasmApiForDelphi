@@ -8,19 +8,27 @@ uses
   ;
 
 type
+  TWasmerCompiler = (CRANELIFT, LLVM, SINGLEPASS);
 
   // wrapper & helper
 
   TWasmByteVecHelper = record helper for TWasmByteVec
     function LoadFromWatFile(fname : string) : Boolean;
-    procedure Wat2Wasm(wat : AnsiString);
+    procedure Wat2Wasm(wat : string);
+  end;
+
+  TWasmerConfig = record helper for TWasmConfig
+    procedure SetCompiler(compiler : TWasmerCompiler);
   end;
 
   TWasmerWat2Wasm = procedure(const wat : PWasmByteVec; out_ : PWasmByteVec); cdecl;
 
+  TWasmConfigSetCompiler = procedure(config : PWasmConfig; Compiler : TWasmerCompiler); cdecl;
+
   TWasmer = record
   public class var
     wat2wasm : TWasmerWat2Wasm;
+    config_set_compiler : TWasmConfigSetCompiler;
   public
     class procedure Init(dll_name : string); static;
     class procedure InitAPIs(runtime : HMODULE); static;
@@ -52,6 +60,7 @@ begin
   if runtime <> 0 then
   begin
     wat2wasm := ProcAddress('wat2wasm');
+    config_set_compiler := ProcAddress('wasm_config_set_compiler');
   end;
 end;
 
@@ -71,11 +80,17 @@ begin
   result := true;
 end;
 
-procedure TWasmByteVecHelper.Wat2Wasm(wat: AnsiString);
+procedure TWasmByteVecHelper.Wat2Wasm(wat: string);
 begin
-  var len := Length(wat);
   var binary := TWasmByteVec.NewFromString(wat);
   TWasmer.wat2wasm(binary.Unwrap, @self);
+end;
+
+{ TWasmerConfig }
+
+procedure TWasmerConfig.SetCompiler(compiler: TWasmerCompiler);
+begin
+  TWasmer.config_set_compiler(@self, compiler);
 end;
 
 end.

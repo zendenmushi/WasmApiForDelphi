@@ -63,7 +63,7 @@ begin
 {$ifdef USE_WASMFILE}
   binary.Unwrap.LoadFromFile('multi.wasm');
 {$else}
-  var wat : AnsiString :=
+  var wat :=
     '(module'+
     '  (func $f (import "" "f") (param i32 i64 i64 i32) (result i32 i64 i64 i32))'+
     ''+
@@ -90,7 +90,7 @@ begin
   // Instantiate.
   writeln('Instantiating module...');
   var imports := TWasmExternVec.Create([ (+callback_func).AsExtern ]);
-  var instance := TWasmInstance.New(+store, +module, @imports, nil);
+  var instance := TWasmInstance.New(+store, +module, @imports);
   if instance.IsNone then
   begin
     writeln('> Error instantiating module!');

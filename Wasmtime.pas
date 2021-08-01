@@ -329,7 +329,7 @@ type
 
   TWasmByteVecHelper = record helper for TWasmByteVec
     function LoadFromWatFile(fname : string) : Boolean;
-    function Wat2Wasm(wat : AnsiString) : TOwnWasmtimeError;
+    function Wat2Wasm(wat : string) : TOwnWasmtimeError;
   end;
 
   TWasmtimeError = record
@@ -2592,10 +2592,11 @@ begin
   result := error = nil;
 end;
 
-function TWasmByteVecHelper.Wat2Wasm(wat: AnsiString): TOwnWasmtimeError;
+function TWasmByteVecHelper.Wat2Wasm(wat: string): TOwnWasmtimeError;
 begin
-  var len := Length(wat);
-  var err := TWasmtime.wat2wasm(PAnsiChar(wat), len, @self);
+  var s8 := UTF8String(wat);
+  var len := Length(s8);
+  var err := TWasmtime.wat2wasm(PAnsiChar(s8), len, @self);
   result := TOwnWasmtimeError.Wrap(err);
 end;
 

@@ -3,7 +3,12 @@ unit WasmTest_ShareMemory;
 interface
 uses
   System.SysUtils
-  , Wasm, Wasmtime
+  , Wasm
+{$ifndef USE_WASMER}
+  , Wasmtime
+{$else}
+  , Wasmer
+{$ifend}
   ;
 
 
@@ -42,7 +47,7 @@ begin
   // Load binary.
   writeln('Loading binary (import memory)...');
   var binary := TWasmByteVec.NewEmpty;
-  var wat : AnsiString :=
+  var wat :=
 
     '(module'+
     '  (memory (import "" "memory") 1)'+
@@ -58,12 +63,7 @@ begin
     '  (data (i32.const 0x0) "\55\AA\55\AA")'+
     ')';
 
-  var err := binary.Unwrap.Wat2Wasm(wat);
-  if err.IsError then
-  begin
-    writeln(err.Unwrap.GetMessage);
-    exit(false);
-  end;
+  binary.Unwrap.Wat2Wasm(wat);
 
   // Compile.
   writeln('Compiling import memory module...');
@@ -75,7 +75,7 @@ begin
   end;
 
   writeln('Loading binary (export memory)...');
-  var wat2 : AnsiString :=
+  var wat2 :=
     '(module'+
     '  (memory (export "memory") 1)'+
     ''+
@@ -99,7 +99,7 @@ begin
 
   writeln('Instantiating export memory module...');
   var imports2 := TWasmExternVec.Create([]);
-  var instance2 := TWasmInstance.New(+store, +module2, @imports2, nil);
+  var instance2 := TWasmInstance.New(+store, +module2, @imports2);
   if instance2.IsNone then
   begin
     writeln('> Error instantiating export module!');
@@ -116,7 +116,7 @@ begin
   // Instantiate.
   writeln('Instantiating import memory module...');
   var imports := TWasmExternVec.Create([ export_s2.Unwrap.Items[0], (+callback_func).AsExtern ]);
-  var instance := TWasmInstance.New(+store, +module, @imports, nil);
+  var instance := TWasmInstance.New(+store, +module, @imports);
   if instance.IsNone then
   begin
     writeln('> Error instantiating import memory module!');

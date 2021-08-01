@@ -40,7 +40,7 @@ begin
 {$ifdef USE_WASMFILE}
   binary.Unwrap.LoadFromFile('finalize.wasm');
 {$else}
-  var wat : AnsiString :=
+  var wat :=
     '(module'+
     '  (func (export "f"))'+
     '  (func (export "g"))'+

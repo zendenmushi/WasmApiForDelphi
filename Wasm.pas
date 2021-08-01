@@ -677,8 +677,10 @@ type
     class function NewUninitialized(size : NativeInt) : TOwnByteVec; static;
     class function New(const init : array of TWasmByte) : TOwnByteVec; overload;  static;
     function LoadFromFile(fname : string) : Boolean;
-    class function NewFromString(s : UTF8String): TOwnName; static;
-    class function NewFromStringNt(s : UTF8String): TOwnName; static;
+    class function NewFromString(s : UTF8String): TOwnName; overload; static;
+    class function NewFromStringNt(s : UTF8String): TOwnName; overload; static;
+    class function NewFromString(s : String): TOwnName; overload; static;
+    class function NewFromStringNt(s : String): TOwnName; overload; static;
     function AsUTF8String : UTF8String;
     function AsString : string;
     function Copy() : TOwnByteVec;
@@ -690,10 +692,10 @@ type
   end;
 
   TWasmName = TWasmByteVec;
-  PWasmName = ^TWasmName;
+  PWasmName = ^TWasmByteVec;
 
   TWasmMessage = TWasmName;
-  PWasmMessage = ^TWasmMessage;
+  PWasmMessage = ^TWasmByteVec;
 
   TWasmFinalizer = procedure(p : Pointer); cdecl;
   TWasmFuncCallBack = function(const args : PWasmValVec; {own} results : PWasmValVec): {own} PWasmTrap; cdecl;
@@ -711,7 +713,7 @@ type
   TWasmEngine = record
   public
     class function New() : TOwnEngine; overload; static;
-    class function NewWithConfig(config : PWasmConfig) : TOwnEngine; overload; static;
+    class function NewWithConfig(config : TOwnConfig) : TOwnEngine; overload; static;
   end;
 // Store
   TWasmStore = record
@@ -761,10 +763,9 @@ type
   TWasmFunctype = record
   public
     function Copy() : TOwnFunctype;
-    class function New(const p : TOwnValtypeVec; const r : TOwnValtypeVec) : TOwnFunctype; overload; static;
     class function New(const p,  r: array of TWasmValkind): TOwnFunctype; overload; static;
     class function New(const p, r: array of TOwnValtype): TOwnFunctype; overload; static;
-    class function New(params : PWasmValtypeVec; results : PWasmValtypeVec) : TOwnFunctype; overload; static;
+    class function New(params : TOwnValtypeVec; results : TOwnValtypeVec) : TOwnFunctype; overload; static;
     function Params() : PWasmValtypeVec;
     function Results() : PWasmValtypeVec;
     function AsExterntype() : PWasmExterntype;
@@ -787,7 +788,8 @@ type
   TWasmGlobaltype = record
   public
     function Copy() : TOwnGlobaltype;
-    class function New(valtype : PWasmValtype; mutability : TWasmMutability) : TOwnGlobaltype; overload; static;
+    class function New(valkind : TWasmValKind; mutability : TWasmMutability) : TOwnGlobaltype; overload; static;
+    class function New(valtype : TOwnValtype; mutability : TWasmMutability) : TOwnGlobaltype; overload; static;
     function Content() : PWasmValtype;
     function Mutability() : TWasmMutability;
     function AsExterntype() : PWasmExterntype;
@@ -810,7 +812,7 @@ type
   TWasmTabletype = record
   public
     function Copy() : TOwnTabletype;
-    class function New(valtype : PWasmValtype;  const limits : PWasmLimits) : TOwnTabletype; overload; static;
+    class function New(valtype : TOwnValtype;  const limits : PWasmLimits) : TOwnTabletype; overload; static;
     function Element() : PWasmValtype;
     function Limits() : PWasmLimits;
     function AsExterntype() : PWasmExterntype;
@@ -882,9 +884,9 @@ type
   TWasmImporttype = record
   public
     function Copy() : TOwnImporttype;
-    class function New(module : PWasmName; name : PWasmName; externtype : PWasmExterntype) : TOwnImporttype; overload; static;
-    function Module() : PWasmName;
-    function Name() : PWasmName;
+    class function New(module : string; name : string; externtype : TOwnExterntype) : TOwnImporttype; overload; static;
+    function Module() : string;
+    function Name() : string;
     function GetType() : PWasmExterntype;
   end;
   TWasmExporttypeVec = record
@@ -904,8 +906,8 @@ type
   TWasmExporttype = record
   public
     function Copy() : TOwnExporttype;
-    class function New(name : PWasmName; externtype : PWasmExterntype) : TOwnExporttype; overload; static;
-    function Name() : PWasmName;
+    class function New(name : string; externtype : TOwnExterntype) : TOwnExporttype; overload; static;
+    function Name() : string;
     function GetType() : PWasmExterntype;
   end;
   TWasmVal = record
@@ -1155,7 +1157,9 @@ type
 // Module Instances
   TWasmInstance = record
   public
-    class function New(store : PWasmStore; const module : PWasmModule; const imports : array of PWasmExtern; trap : PPWasmTrap) : TOwnInstance; overload; static;
+    class function New(store : PWasmStore; const module : PWasmModule; const imports : array of PWasmExtern) : TOwnInstance; overload; static;
+    class function New(store : PWasmStore; const module : PWasmModule; const imports : array of PWasmExtern; var trap : TOwnTrap) : TOwnInstance; overload; static;
+    class function New(store : PWasmStore;  const module : PWasmModule;  const imports : PWasmExternVec) : TOwnInstance; overload; static;
     function Copy() : TOwnInstance;
     function Same(const p : PWasmInstance) : Boolean;
     function GetHostInfo : Pointer;
@@ -1163,7 +1167,7 @@ type
     procedure SetHostInfoWithFinalizer(info : Pointer ;finalizer : TWasmFinalizer);
     function AsRef : PWasmRef;
     function AsRefConst : PWasmRef;
-    class function New(store : PWasmStore;  const module : PWasmModule;  const imports : PWasmExternVec; trap : PPWasmTrap) : TOwnInstance; overload; static;
+    class function New(store : PWasmStore;  const module : PWasmModule;  const imports : PWasmExternVec; var {own} trap : TOwnTrap) : TOwnInstance; overload; static;
     function GetExports() : TOwnExternVec;
   end;
   TWasmByteVecNewEmptyAPI = procedure({own} out_ : PWasmByteVec); cdecl;
@@ -1175,7 +1179,7 @@ type
   TWasmConfigNewAPI = function () : {own} PWasmConfig; cdecl;
   TWasmEngineDeleteAPI = procedure(p : PWasmEngine); cdecl;
   TWasmEngineNewAPI = function () : {own} PWasmEngine; cdecl;
-  TWasmEngineNewWithConfigAPI = function (config : PWasmConfig) : {own} PWasmEngine; cdecl;
+  TWasmEngineNewWithConfigAPI = function ({own} config : PWasmConfig) : {own} PWasmEngine; cdecl;
   TWasmStoreDeleteAPI = procedure(p : PWasmStore); cdecl;
   TWasmStoreNewAPI = function (engine : PWasmEngine) : {own} PWasmStore; cdecl;
   TWasmValtypeDeleteAPI = procedure(p : PWasmValtype); cdecl;
@@ -1194,7 +1198,7 @@ type
   TWasmFunctypeVecNewAPI = procedure({own} out_ : PWasmFunctypeVec; size : NativeInt; {own} const init : PPWasmFunctype); cdecl;
   TWasmFunctypeVecCopyAPI = procedure({own} out_ : PWasmFunctypeVec; src : PWasmFunctypeVec); cdecl;
   TWasmFunctypeVecDeleteAPI = procedure(p : PWasmFunctypeVec); cdecl;
-  TWasmFunctypeNewAPI = function (params : PWasmValtypeVec; results : PWasmValtypeVec) : {own} PWasmFunctype; cdecl;
+  TWasmFunctypeNewAPI = function ({own} params : PWasmValtypeVec; {own} results : PWasmValtypeVec) : {own} PWasmFunctype; cdecl;
   TWasmFunctypeParamsAPI = function (const functype : PWasmFunctype) : PWasmValtypeVec; cdecl;
   TWasmFunctypeResultsAPI = function (const functype : PWasmFunctype) : PWasmValtypeVec; cdecl;
   TWasmGlobaltypeDeleteAPI = procedure(p : PWasmGlobaltype); cdecl;
@@ -1204,7 +1208,7 @@ type
   TWasmGlobaltypeVecNewAPI = procedure({own} out_ : PWasmGlobaltypeVec; size : NativeInt; {own} const init : PPWasmGlobaltype); cdecl;
   TWasmGlobaltypeVecCopyAPI = procedure({own} out_ : PWasmGlobaltypeVec; src : PWasmGlobaltypeVec); cdecl;
   TWasmGlobaltypeVecDeleteAPI = procedure(p : PWasmGlobaltypeVec); cdecl;
-  TWasmGlobaltypeNewAPI = function (valtype : PWasmValtype; mutability : TWasmMutability) : {own} PWasmGlobaltype; cdecl;
+  TWasmGlobaltypeNewAPI = function ({own} valtype : PWasmValtype; mutability : TWasmMutability) : {own} PWasmGlobaltype; cdecl;
   TWasmGlobaltypeContentAPI = function (const globaltype : PWasmGlobaltype) : PWasmValtype; cdecl;
   TWasmGlobaltypeMutabilityAPI = function (const globaltype : PWasmGlobaltype) : TWasmMutability; cdecl;
   TWasmTabletypeDeleteAPI = procedure(p : PWasmTabletype); cdecl;
@@ -1214,7 +1218,7 @@ type
   TWasmTabletypeVecNewAPI = procedure({own} out_ : PWasmTabletypeVec; size : NativeInt; {own} const init : PPWasmTabletype); cdecl;
   TWasmTabletypeVecCopyAPI = procedure({own} out_ : PWasmTabletypeVec; src : PWasmTabletypeVec); cdecl;
   TWasmTabletypeVecDeleteAPI = procedure(p : PWasmTabletypeVec); cdecl;
-  TWasmTabletypeNewAPI = function (valtype : PWasmValtype; const limits : PWasmLimits) : {own} PWasmTabletype; cdecl;
+  TWasmTabletypeNewAPI = function ({own} valtype : PWasmValtype; const limits : PWasmLimits) : {own} PWasmTabletype; cdecl;
   TWasmTabletypeElementAPI = function (const tabletype : PWasmTabletype) : PWasmValtype; cdecl;
   TWasmTabletypeLimitsAPI = function (const tabletype : PWasmTabletype) : PWasmLimits; cdecl;
   TWasmMemorytypeDeleteAPI = procedure(p : PWasmMemorytype); cdecl;
@@ -1257,7 +1261,7 @@ type
   TWasmImporttypeVecNewAPI = procedure({own} out_ : PWasmImporttypeVec; size : NativeInt; {own} const init : PPWasmImporttype); cdecl;
   TWasmImporttypeVecCopyAPI = procedure({own} out_ : PWasmImporttypeVec; src : PWasmImporttypeVec); cdecl;
   TWasmImporttypeVecDeleteAPI = procedure(p : PWasmImporttypeVec); cdecl;
-  TWasmImporttypeNewAPI = function (module : PWasmName; name : PWasmName; externtype : PWasmExterntype) : {own} PWasmImporttype; cdecl;
+  TWasmImporttypeNewAPI = function ({own} module : PWasmName; {own} name : PWasmName; {own} externtype : PWasmExterntype) : {own} PWasmImporttype; cdecl;
   TWasmImporttypeModuleAPI = function (const importtype : PWasmImporttype) : PWasmName; cdecl;
   TWasmImporttypeNameAPI = function (const importtype : PWasmImporttype) : PWasmName; cdecl;
   TWasmImporttypeTypeAPI = function (const importtype : PWasmImporttype) : PWasmExterntype; cdecl;
@@ -1268,11 +1272,11 @@ type
   TWasmExporttypeVecNewAPI = procedure({own} out_ : PWasmExporttypeVec; size : NativeInt; {own} const init : PPWasmExporttype); cdecl;
   TWasmExporttypeVecCopyAPI = procedure({own} out_ : PWasmExporttypeVec; src : PWasmExporttypeVec); cdecl;
   TWasmExporttypeVecDeleteAPI = procedure(p : PWasmExporttypeVec); cdecl;
-  TWasmExporttypeNewAPI = function (name : PWasmName; externtype : PWasmExterntype) : {own} PWasmExporttype; cdecl;
+  TWasmExporttypeNewAPI = function ({own} name : PWasmName; {own} externtype : PWasmExterntype) : {own} PWasmExporttype; cdecl;
   TWasmExporttypeNameAPI = function (const exporttype : PWasmExporttype) : PWasmName; cdecl;
   TWasmExporttypeTypeAPI = function (const exporttype : PWasmExporttype) : PWasmExterntype; cdecl;
-  TWasmValDeleteAPI = procedure (v : PWasmVal); cdecl;
-  TWasmValCopyAPI = procedure (out_ : PWasmVal; const val1 : PWasmVal); cdecl;
+  TWasmValDeleteAPI = procedure ({own} v : PWasmVal); cdecl;
+  TWasmValCopyAPI = procedure ({own} out_ : PWasmVal; const val1 : PWasmVal); cdecl;
   TWasmValVecNewEmptyAPI = procedure({own} out_ : PWasmValVec); cdecl;
   TWasmValVecNewUninitializedAPI = procedure({own} out_ : PWasmValVec; size : NativeInt); cdecl;
   TWasmValVecNewAPI = procedure({own} out_ : PWasmValVec; size : NativeInt; {own} const init : PWasmVal); cdecl;
@@ -1306,9 +1310,9 @@ type
   TWasmRefAsTrapAPI= function({own} self : PWasmRef) : PWasmTrap; cdecl;
   TWasmRefAsTrapConstAPI = function(const {own} self : PWasmRef) : PWasmTrap; cdecl;
   TWasmTrapNewAPI = function (store : PWasmStore; const message : PWasmMessage) : {own} PWasmTrap; cdecl;
-  TWasmTrapMessageAPI = procedure (const trap : PWasmTrap; out_ : PWasmMessage); cdecl;
+  TWasmTrapMessageAPI = procedure (const trap : PWasmTrap; {own} out_ : PWasmMessage); cdecl;
   TWasmTrapOriginAPI = function (const trap : PWasmTrap) : {own} PWasmFrame; cdecl;
-  TWasmTrapTraceAPI = procedure (const trap : PWasmTrap; out_ : PWasmFrameVec); cdecl;
+  TWasmTrapTraceAPI = procedure (const trap : PWasmTrap; {own} out_ : PWasmFrameVec); cdecl;
   TWasmForeignDeleteAPI = procedure(p : PWasmForeign); cdecl;
   TWasmForeignCopyAPI = function(const {own} self : PWasmForeign) : PWasmForeign; cdecl;
   TWasmForeignSameAPI = function(const {own} self : PWasmForeign; target : PWasmForeign) : Boolean; cdecl;
@@ -1344,9 +1348,9 @@ type
   TWasmModuleObtainAPI = function(store : PWasmStore; const {own} self : PWasmSharedModule) : {own} PWasmModule; cdecl;
   TWasmModuleNewAPI = function (store : PWasmStore; const binary : PWasmByteVec) : {own} PWasmModule; cdecl;
   TWasmModuleValidateAPI = function (store : PWasmStore; const binary : PWasmByteVec) : Boolean; cdecl;
-  TWasmModuleImportsAPI = procedure (const module : PWasmModule; out_ : PWasmImporttypeVec); cdecl;
-  TWasmModuleExportsAPI = procedure (const module : PWasmModule; out_ : PWasmExporttypeVec); cdecl;
-  TWasmModuleSerializeAPI = procedure (const module : PWasmModule; out_ : PWasmByteVec); cdecl;
+  TWasmModuleImportsAPI = procedure (const module : PWasmModule; {own} out_ : PWasmImporttypeVec); cdecl;
+  TWasmModuleExportsAPI = procedure (const module : PWasmModule; {own} out_ : PWasmExporttypeVec); cdecl;
+  TWasmModuleSerializeAPI = procedure (const module : PWasmModule; {own} out_ : PWasmByteVec); cdecl;
   TWasmModuleDeserializeAPI = function (store : PWasmStore; const byte_vec : PWasmByteVec) : {own} PWasmModule; cdecl;
   TWasmFuncDeleteAPI = procedure(p : PWasmFunc); cdecl;
   TWasmFuncCopyAPI = function(const {own} self : PWasmFunc) : PWasmFunc; cdecl;
@@ -1376,7 +1380,7 @@ type
   TWasmRefAsGlobalConstAPI = function(const {own} self : PWasmRef) : PWasmGlobal; cdecl;
   TWasmGlobalNewAPI = function (store : PWasmStore; const globaltype : PWasmGlobaltype; const val : PWasmVal) : {own} PWasmGlobal; cdecl;
   TWasmGlobalTypeAPI = function (const global : PWasmGlobal) : {own} PWasmGlobaltype; cdecl;
-  TWasmGlobalGetAPI = procedure (const global : PWasmGlobal; out_ : PWasmVal); cdecl;
+  TWasmGlobalGetAPI = procedure (const global : PWasmGlobal; {own} out_ : PWasmVal); cdecl;
   TWasmGlobalSetAPI = procedure (global : PWasmGlobal; const val : PWasmVal); cdecl;
   TWasmTableDeleteAPI = procedure(p : PWasmTable); cdecl;
   TWasmTableCopyAPI = function(const {own} self : PWasmTable) : PWasmTable; cdecl;
@@ -1453,8 +1457,8 @@ type
   TWasmInstanceAsRefConstAPI = function(const {own} self : PWasmInstance) : PWasmRef; cdecl;
   TWasmRefAsInstanceAPI= function({own} self : PWasmRef) : PWasmInstance; cdecl;
   TWasmRefAsInstanceConstAPI = function(const {own} self : PWasmRef) : PWasmInstance; cdecl;
-  TWasmInstanceNewAPI = function (store : PWasmStore; const module : PWasmModule; const imports : PWasmExternVec; trap : PPWasmTrap) : {own} PWasmInstance; cdecl;
-  TWasmInstanceExportsAPI = procedure (const instance : PWasmInstance; out_ : PWasmExternVec); cdecl;
+  TWasmInstanceNewAPI = function (store : PWasmStore; const module : PWasmModule; const imports : PWasmExternVec; {own} trap : PPWasmTrap) : {own} PWasmInstance; cdecl;
+  TWasmInstanceExportsAPI = procedure (const instance : PWasmInstance; {own} out_ : PWasmExternVec); cdecl;
 
   TWasm = record
   public class var
@@ -2875,6 +2879,24 @@ begin
   result.FStrongRef := TRcContainer<PWasmByteVec>.Create(ret, byte_vec_disposer); // ref ++
 end;
 
+class function TWasmByteVec.NewFromStringNt(s : string): TOwnName;
+begin
+  var ret : PWasmByteVec;
+  System.New(ret);
+  var s8 := UTF8String(s);
+  TWasm.byte_vec_new(ret, Length(s8)+1, @s8[1]);
+  result.FStrongRef := TRcContainer<PWasmByteVec>.Create(ret, byte_vec_disposer); // ref ++
+end;
+
+class function TWasmByteVec.NewFromString(s : string): TOwnName;
+begin
+  var ret : PWasmByteVec;
+  System.New(ret);
+  var s8 := UTF8String(s);
+  TWasm.byte_vec_new(ret, Length(s8), @s8[1]);
+  result.FStrongRef := TRcContainer<PWasmByteVec>.Create(ret, byte_vec_disposer); // ref ++
+end;
+
 { TOwnConfig }
 
 class function TOwnConfig.Wrap(p: PWasmConfig; deleter : TRcDeleter): TOwnConfig;
@@ -2983,9 +3005,9 @@ begin
   result := TOwnEngine.Wrap(p, engine_disposer); // ref ++
 end;
 
-class function TWasmEngine.NewWithConfig(config : PWasmConfig) : TOwnEngine;
+class function TWasmEngine.NewWithConfig(config : TOwnConfig) : TOwnEngine;
 begin
-  var p := TWasm.engine_new_with_config(config);
+  var p := TWasm.engine_new_with_config((-config).Move);
   result := TOwnEngine.Wrap(p, engine_disposer); // ref ++
 end;
 
@@ -3380,15 +3402,6 @@ begin
   result.FStrongRef := TRcContainer<PWasmFunctype>.Create(p, functype_disposer);
 end;
 
-class function TWasmFuncType.New(const p : TOwnValtypeVec; const r : TOwnValtypeVec) : TOwnFunctype;
-begin
-  var func := TWasm.functype_new(p.Unwrap, r.Unwrap);
-  if func <> nil then
-  begin
-    result.FStrongRef := TRcContainer<PWasmFunctype>.Create(func, functype_disposer);
-  end else result.FStrongRef := nil;
-end;
-
 class function TWasmFuncType.New(const p,  r: array of TWasmValkind): TOwnFunctype;
 begin
   var pa := TWasmValtypeVec.New(p);
@@ -3411,9 +3424,10 @@ begin
   else result.FStrongRef := nil;
 end;
 
-class function TWasmFunctype.New(params : PWasmValtypeVec; results : PWasmValtypeVec) : TOwnFunctype;
+
+class function TWasmFunctype.New(params : TOwnValtypeVec; results : TOwnValtypeVec) : TOwnFunctype;
 begin
-  var p := TWasm.functype_new(params, results);
+  var p := TWasm.functype_new((-params).Move, (-results).Move);
   result := TOwnFunctype.Wrap(p, functype_disposer); // ref ++
 end;
 
@@ -3588,10 +3602,17 @@ begin
   result.FStrongRef := TRcContainer<PWasmGlobaltype>.Create(p, globaltype_disposer);
 end;
 
-
-class function TWasmGlobaltype.New(valtype : PWasmValtype; mutability : TWasmMutability) : TOwnGlobaltype;
+class function TWasmGlobaltype.New(valkind : TWasmValKind; mutability : TWasmMutability) : TOwnGlobaltype;
 begin
-  var p := TWasm.globaltype_new(valtype, mutability);
+  var valtype := TWasmValtype.New(valkind);
+  var p := TWasm.globaltype_new((-valtype).Move, mutability);
+  result := TOwnGlobaltype.Wrap(p, globaltype_disposer); // ref ++
+end;
+
+
+class function TWasmGlobaltype.New(valtype : TOwnValtype; mutability : TWasmMutability) : TOwnGlobaltype;
+begin
+  var p := TWasm.globaltype_new((-valtype).Move, mutability);
   result := TOwnGlobaltype.Wrap(p, globaltype_disposer); // ref ++
 end;
 
@@ -3767,9 +3788,9 @@ begin
 end;
 
 
-class function TWasmTabletype.New(valtype : PWasmValtype;  const limits : PWasmLimits) : TOwnTabletype;
+class function TWasmTabletype.New(valtype : TOwnValtype;  const limits : PWasmLimits) : TOwnTabletype;
 begin
-  var p := TWasm.tabletype_new(valtype, limits);
+  var p := TWasm.tabletype_new((-valtype).Move, limits);
   result := TOwnTabletype.Wrap(p, tabletype_disposer); // ref ++
 end;
 
@@ -4315,20 +4336,22 @@ begin
 end;
 
 
-class function TWasmImporttype.New(module : PWasmName; name : PWasmName; externtype : PWasmExterntype) : TOwnImporttype;
+class function TWasmImporttype.New(module : string; name : string; externtype : TOwnExterntype) : TOwnImporttype;
 begin
-  var p := TWasm.importtype_new(module, name, externtype);
+  var p := TWasm.importtype_new(PWasmName((-TWasmName.NewFromString(module)).Move), PWasmName((-TWasmName.NewFromString(name)).Move), (-externtype).Move);
   result := TOwnImporttype.Wrap(p, importtype_disposer); // ref ++
 end;
 
-function TWasmImporttype.Module() : PWasmName;
+function TWasmImporttype.Module() : string;
 begin
-  result := TWasm.importtype_module(@self);
+  var p := TWasm.importtype_module(@self);
+  result := p.AsString;
 end;
 
-function TWasmImporttype.Name() : PWasmName;
+function TWasmImporttype.Name() : string;
 begin
-  result := TWasm.importtype_name(@self);
+  var p := TWasm.importtype_name(@self);
+  result := p.AsString;
 end;
 
 function TWasmImporttype.GetType() : PWasmExterntype;
@@ -4488,15 +4511,16 @@ begin
 end;
 
 
-class function TWasmExporttype.New(name : PWasmName; externtype : PWasmExterntype) : TOwnExporttype;
+class function TWasmExporttype.New(name : string; externtype : TOwnExterntype) : TOwnExporttype;
 begin
-  var p := TWasm.exporttype_new(name, externtype);
+  var p := TWasm.exporttype_new(PWasmName((-TWasmName.NewFromString(name)).Move), (-externtype).Move);
   result := TOwnExporttype.Wrap(p, exporttype_disposer); // ref ++
 end;
 
-function TWasmExporttype.Name() : PWasmName;
+function TWasmExporttype.Name() : string;
 begin
-  result := TWasm.exporttype_name(@self);
+  var p := TWasm.exporttype_name(@self);
+  result := p.AsString;
 end;
 
 function TWasmExporttype.GetType() : PWasmExterntype;
@@ -6250,12 +6274,28 @@ end;
 
 { TWasmInstance }
 
-class function TWasmInstance.New(store: PWasmStore; const module: PWasmModule; const imports: array of PWasmExtern; trap: PPWasmTrap): TOwnInstance;
+class function TWasmInstance.New(store: PWasmStore; const module: PWasmModule; const imports: array of PWasmExtern): TOwnInstance;
 begin
   var imps := TWasmExternVec.Create(imports);
 
-  var instance := TWasm.instance_new(store, module, @imps, trap);
+  var instance := TWasm.instance_new(store, module, @imps, nil);
   result := TOwnInstance.Wrap(instance, instance_disposer)
+end;
+
+class function TWasmInstance.New(store: PWasmStore; const module: PWasmModule; const imports: array of PWasmExtern; var trap: TOwnTrap): TOwnInstance;
+begin
+  var imps := TWasmExternVec.Create(imports);
+  var tmp_trap : PWasmTrap;
+
+  var instance := TWasm.instance_new(store, module, @imps, @tmp_trap);
+  trap := TOwnTrap.Wrap(tmp_trap);
+  result := TOwnInstance.Wrap(instance, instance_disposer)
+end;
+
+class function TWasmInstance.New(store : PWasmStore;  const module : PWasmModule;  const imports : PWasmExternVec) : TOwnInstance;
+begin
+  var p := TWasm.instance_new(store, module, imports, nil);
+  result := TOwnInstance.Wrap(p, instance_disposer); // ref ++
 end;
 function TWasmInstance.Copy: TOwnInstance;
 begin
@@ -6293,9 +6333,11 @@ begin
   result := TWasm.instance_as_ref_const(@self);
 end;
 
-class function TWasmInstance.New(store : PWasmStore;  const module : PWasmModule;  const imports : PWasmExternVec; trap : PPWasmTrap) : TOwnInstance;
+class function TWasmInstance.New(store : PWasmStore;  const module : PWasmModule;  const imports : PWasmExternVec; var {own} trap : TOwnTrap) : TOwnInstance;
 begin
-  var p := TWasm.instance_new(store, module, imports, trap);
+  var tmp_trap : PWasmTrap;
+  var p := TWasm.instance_new(store, module, imports, @tmp_trap);
+  trap := TOwnTrap.Wrap(tmp_trap);
   result := TOwnInstance.Wrap(p, instance_disposer); // ref ++
 end;
 
