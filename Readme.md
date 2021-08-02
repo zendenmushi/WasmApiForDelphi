@@ -1,7 +1,8 @@
 # Wasm api for Delphi
 
 ## build
-Open .dpoj by Delphi10.4 or later
+Open .dpoj by Delphi10.4 or later  
+(Now Windows x64 only)
 
 ## Run
 Need WebAssembly runtime. (default=wasmtime, need rebuild=wasmer)  
