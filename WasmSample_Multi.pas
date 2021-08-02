@@ -54,7 +54,18 @@ function MultiSample() : Boolean;
 begin
   // Initialize.
   writeln('Initializing...');
+
+{$ifdef USE_WASMER}
+  var features := TWasmerFeatures.New();
+  (+features).MultiValue(true); // Probably true by default, but test for wasmer_features_xxx
+
+  var config := TWasmConfig.New();
+  (+config).SetFeatures(features);
+
+  var engine := TWasmEngine.NewWithConfig(config);
+{$else}
   var engine := TWasmEngine.New();
+{$endif}
   var store := TWasmStore.New(+engine);
 
   // Load binary.
