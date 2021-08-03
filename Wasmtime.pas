@@ -382,7 +382,7 @@ type
 
   TWasmtimeInstance = record
   public
-    class function New(context  : PWasmtimeContext; const module : PWasmtimeModule; const imports : PWasmtimeExtern; nimports : NativeUInt; trap : PPWasmTrap) : TResultWasmtimeInstance; static;
+    class function New(context  : PWasmtimeContext; const module : PWasmtimeModule; const imports : PWasmtimeExtern; nimports : NativeUInt) : TResultWasmtimeInstance; static;
     function GetType() : TOwnWasmtimeInstancetype;
     function GetExport(name : UTF8String) : TOwnWasmtimeExtern;
     function GetExportByIndex(index : NativeUInt; out name : UTF8String) : TOwnWasmtimeExtern;
@@ -421,9 +421,9 @@ type
 {$ENDREGION}
   TWasmtimeModule = record
   public
-    class function New(engine : PWasmEngine; const wasm : PByte; wasm_len : NativeUInt) : TResultWasmtimeModule; static;
+    class function New(engine : PWasmEngine; const binary : PWasmByteVec) : TResultWasmtimeModule; static;
     function Clone() : TOwnWasmtimeModule;
-    function Validate(engine : PWasmEngine; const wasm : PByte; wasm_len : NativeUInt) : TOwnWasmtimeError;
+    function Validate(engine : PWasmEngine;  const binary : PWasmByteVec) : TOwnWasmtimeError;
     function GetType() : TOwnWasmtimeModuletype;
     function Serialize() : TResultByteVec;
     class function Deserialize(engine : PWasmEngine; const bytes : PByte; bytes_len : NativeUInt) : TResultWasmtimeModule; static;
@@ -2807,15 +2807,17 @@ begin
   result := TOwnWasmtimeInstancetype.Wrap(p);
 end;
 
-class function TWasmtimeInstance.New(context: PWasmtimeContext; const module: PWasmtimeModule; const imports: PWasmtimeExtern; nimports: NativeUInt; trap : PPWasmTrap): TResultWasmtimeInstance;
+class function TWasmtimeInstance.New(context: PWasmtimeContext; const module: PWasmtimeModule; const imports: PWasmtimeExtern; nimports: NativeUInt): TResultWasmtimeInstance;
 begin
   var p : PWasmtimeInstance;
+  var trap : PWasmTrap;
   System.New(p);
-  var err := TWasmtime.instance_new(context, module, imports, nimports, p^, trap);
+  var err := TWasmtime.instance_new(context, module, imports, nimports, p^, @trap);
   p.context := context;
   result.IsError := err <> nil;
   result.Instance := TOwnWasmtimeInstance.Wrap(p);
   result.Error := TOwnWasmtimeError.Wrap(err);
+  result.Trap := TOwnTrap.Wrap(trap);
 end;
 
 { TWasmtimeGlobal }
@@ -3153,10 +3155,10 @@ begin
   result := TOwnWasmtimeModuletype.Wrap(TWasmtime.module_type(@self));
 end;
 
-class function TWasmtimeModule.New(engine: PWasmEngine; const wasm: PByte; wasm_len: NativeUInt): TResultWasmtimeModule;
+class function TWasmtimeModule.New(engine: PWasmEngine; const binary : PWasmByteVec): TResultWasmtimeModule;
 begin
   var ret : PWasmtimeModule;
-  var err := TWasmtime.module_new(engine, wasm, wasm_len, @ret);
+  var err := TWasmtime.module_new(engine, PByte(binary.data), binary.size, @ret);
   result.IsError := err <> nil;
   result.Module := TOwnWasmtimeModule.Wrap(ret);
   result.Error := TOwnWasmtimeError.Wrap(err);
@@ -3171,9 +3173,9 @@ begin
   result.Error := TOwnWasmtimeError.Wrap(err);
 end;
 
-function TWasmtimeModule.Validate(engine: PWasmEngine; const wasm: PByte; wasm_len: NativeUInt): TOwnWasmtimeError;
+function TWasmtimeModule.Validate(engine: PWasmEngine;  const binary : PWasmByteVec): TOwnWasmtimeError;
 begin
-  var err := TWasmtime.module_validate(engine, wasm, wasm_len);
+  var err := TWasmtime.module_validate(engine, PByte(binary.data), binary.size);
   result := TOwnWasmtimeError.Wrap(err);
 end;
 

@@ -1034,8 +1034,8 @@ type
     function Share() : TOwnSharedModule;
     function AsRef : PWasmRef;
     function AsRefConst : PWasmRef;
-    class function New(store : PWasmStore;  const binary : PWasmByteVec) : TOwnModule; overload; static;
-    function Validate(store : PWasmStore;  const binary : PWasmByteVec) : Boolean;
+    class function New(store : PWasmStore; const binary : PWasmByteVec) : TOwnModule; overload; static;
+    function Validate(store : PWasmStore; const binary : PWasmByteVec) : Boolean;
     function Imports() : TOwnImporttypeVec;
     function GetExports() : TOwnExporttypeVec;
     function Serialize() : TOwnByteVec;

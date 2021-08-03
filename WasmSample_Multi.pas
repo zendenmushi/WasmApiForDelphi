@@ -108,8 +108,6 @@ begin
     exit(false);
   end;
 
-//  TWasm.func_delete(callback_func);
-
   // Extract export.
   writeln('Extracting export...');
   var export_s := (+instance).GetExports;

@@ -37,7 +37,7 @@ begin
   var context := (+store).Context;
 
   var linking1wasm := TWasmByteVec.NewEmpty;
-  var err := (+linking1wasm).Wat2Wasm(
+  var ret := (+linking1wasm).Wat2Wasm(
     '(module'#10+
     '  (import "linking2" "double" (func $double (param i32) (result i32)))'#10+
     '  (import "linking2" "log" (func $log (param i32 i32)))'#10+
@@ -58,10 +58,10 @@ begin
     '  (data (global.get $offset) "Hello, world!\n")'#10+
     ')'
   );
-  if err.IsError then exit_with_error('Failed to wat2wasm linking1', err, nil);
+  if ret.IsError then exit_with_error('Failed to wat2wasm linking1', ret, nil);
 
   var linking2wasm := TWasmByteVec.NewEmpty;
-  err := (+linking2wasm).Wat2Wasm(
+  ret := (+linking2wasm).Wat2Wasm(
     '(module'#10+
     '  (type $fd_write_ty (func (param i32 i32 i32 i32) (result i32)))'#10+
     '  (import "wasi_snapshot_preview1" "fd_write" (func $fd_write (type $fd_write_ty)))'#10+
@@ -91,15 +91,15 @@ begin
     '  (global (export "memory_offset") i32 (i32.const 65536))'#10+
     ')'
   );
-  if err.IsError then exit_with_error('Failed to wat2wasm linking2', err, nil);
+  if ret.IsError then exit_with_error('Failed to wat2wasm linking2', ret, nil);
 
-  var ret := TWasmtimeModule.New(+engine, PByte((+linking1wasm).data), (+linking1wasm).size);
-  if ret.IsError then exit_with_error('Failed to compile linking1', ret.Error, nil);
-  var linking1_module := ret.Module;
+  var module := TWasmtimeModule.New(+engine, +linking1wasm);
+  if module.IsError then exit_with_error('Failed to compile linking1', module.Error, nil);
+  var linking1_module := module.Module;
 
-  ret := TWasmtimeModule.New(+engine, PByte((+linking2wasm).data), (+linking2wasm).size);
-  if ret.IsError then exit_with_error('Failed to compile linking2', ret.Error, nil);
-  var linking2_module := ret.Module;
+  module := TWasmtimeModule.New(+engine, +linking2wasm);
+  if module.IsError then exit_with_error('Failed to compile linking2', module.Error, nil);
+  var linking2_module := module.Module;
 
   var trap : TOwnTrap;
   // Configure WASI and store it within our `wasmtime_store_t`
@@ -110,22 +110,22 @@ begin
   (+wasi_config).InheritStdin();
   (+wasi_config).InheritStdout();
   (+wasi_config).InheritStderr();
-  err := context.SetWasi(wasi_config);
-  if err.IsError then exit_with_error('Failed to instantiate wasi', err, nil);
+  ret := context.SetWasi(wasi_config);
+  if ret.IsError then exit_with_error('Failed to instantiate wasi', ret, nil);
 
   // Create our linker which will be linking our modules together, and then add
   // our WASI instance to it.
   var linker := TWasmtimeLinker.New(+engine);
-  err := (+linker).DefineWasi;
-  if err.IsError then exit_with_error('Failed to link wasi', err, nil);
+  ret := (+linker).DefineWasi;
+  if ret.IsError then exit_with_error('Failed to link wasi', ret, nil);
 
   // Instantiate `linking2` with our linker.
   var linking2 := (+linker).Instantiate(context, +linking2_module);
   if linking2.IsError or linking2.Trap.IsError then exit_with_error('Failed to instantiate linking2', linking2.Error, linking2.Trap.Unwrap);
 
   // Register our new `linking2` instance with the linker
-  err := (+linker).DefineInstance(context, 'linking2', +linking2.Instance);
-  if err.IsError then exit_with_error('Failed to link linking2"', linking2.Error, nil);
+  ret := (+linker).DefineInstance(context, 'linking2', +linking2.Instance);
+  if ret.IsError then exit_with_error('Failed to link linking2', ret, nil);
 
 
   // Instantiate `linking1` with the linker now that `linking2` is defined
@@ -136,8 +136,8 @@ begin
   var run := (+linking1.Instance).GetExport('run');
   assert(not run.IsNone);
   assert((+run).kind = WASMTIME_EXTERN_FUNC);
-  err := (+run).func.Call(nil, 0, nil, 0, trap);
-  if err.IsError or trap.IsError then  exit_with_error('Failed to call run', linking1.Error, nil);
+  ret := (+run).func.Call(nil, 0, nil, 0, trap);
+  if ret.IsError or trap.IsError then  exit_with_error('Failed to call run', ret, nil);
 
   result := true;
 end;

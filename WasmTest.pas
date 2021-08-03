@@ -42,7 +42,9 @@ begin
     writeln('4: Multi');
     writeln('5: Table (*NG : ''table_get'' is not implemented in wasmer, ''func_as_ref'' is not implemented)');
     writeln('6: Threads (* wasmer NG : ''module_share'' is not implemented in wasmer)');
+{$ifndef USE_WASMER}
     writeln('7: Linking / Wasmtime');
+{$ifend}
     writeln('8: ShareMemory');
     writeln('9: Bench');
     writeln('');
